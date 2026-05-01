@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useTranslation } from "react-i18next";
 import { Cpu, Plus } from "lucide-react";
@@ -12,9 +12,14 @@ import { ConfirmDeleteDialog } from "@/components/shared/confirm-delete-dialog";
 import { useProviders, type ProviderData } from "./hooks/use-providers";
 import { useChatGPTOAuthProviderQuotas } from "./hooks/use-chatgpt-oauth-provider-quotas";
 import { useChatGPTOAuthProviderStatuses } from "./hooks/use-chatgpt-oauth-provider-statuses";
-import { ProviderFormDialog } from "./provider-form-dialog";
 import { ProviderListRow } from "./provider-list-row";
-import { PoolSetupWizardDialog } from "./pool-setup-wizard-dialog";
+
+const ProviderFormDialog = lazy(() =>
+  import("./provider-form-dialog").then((m) => ({ default: m.ProviderFormDialog }))
+);
+const PoolSetupWizardDialog = lazy(() =>
+  import("./pool-setup-wizard-dialog").then((m) => ({ default: m.PoolSetupWizardDialog }))
+);
 import {
   getChatGPTOAuthPoolOwnership,
   sortProvidersForPoolHierarchy,
@@ -64,6 +69,10 @@ function ProviderListView() {
     () => getChatGPTOAuthPoolOwnership(providers),
     [providers],
   );
+  const selectablePoolOwnership = useMemo(
+    () => getChatGPTOAuthPoolOwnership(providers, { enabledOnly: true }),
+    [providers],
+  );
   const oauthAvailabilityByName = useMemo(
     () => new Map(statuses.map((status) => [status.provider.name, status.availability])),
     [statuses],
@@ -73,10 +82,11 @@ function ProviderListView() {
     () => providers.filter(
       (p) =>
         p.provider_type === "chatgpt_oauth" &&
-        !poolOwnership.membersByOwner.has(p.name) &&
-        !poolOwnership.ownerByMember.has(p.name),
+        p.enabled &&
+        !selectablePoolOwnership.membersByOwner.has(p.name) &&
+        !selectablePoolOwnership.ownerByMember.has(p.name),
     ),
-    [providers, poolOwnership],
+    [providers, selectablePoolOwnership],
   );
 
   const filtered = useMemo(() => providers.filter(
@@ -202,7 +212,7 @@ function ProviderListView() {
                       return owner?.display_name || owner?.name || ownerName;
                     })(),
                     memberCount: poolOwnership.membersByOwner.get(p.name)?.length ?? 0,
-                    strategy: poolOwnership.strategyByOwner.get(p.name) ?? "primary_first",
+                    strategy: poolOwnership.strategyByOwner.get(p.name) ?? "priority_order",
                     connectorPosition: memberConnectorByName.get(p.name) ?? "none",
                     quota: quotaByName.get(p.name),
                     quotaLoading: oauthAvailabilityByName.get(p.name) === "ready"
@@ -211,8 +221,9 @@ function ProviderListView() {
                   } : undefined}
                   showPoolHint={
                     p.provider_type === "chatgpt_oauth" &&
-                    !poolOwnership.ownerByMember.has(p.name) &&
-                    !poolOwnership.membersByOwner.has(p.name) &&
+                    p.enabled &&
+                    !selectablePoolOwnership.ownerByMember.has(p.name) &&
+                    !selectablePoolOwnership.membersByOwner.has(p.name) &&
                     unpooledProviders.length >= 2
                   }
                   onClick={() => navigate(`/providers/${p.id}`)}
@@ -235,26 +246,30 @@ function ProviderListView() {
         )}
       </div>
 
-      <ProviderFormDialog
-        open={formOpen}
-        onOpenChange={setFormOpen}
-        onSubmit={async (data) => {
-          await createProvider(data);
-          refresh();
-        }}
-        existingProviders={providers}
-      />
+      <Suspense fallback={null}>
+        <ProviderFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          onSubmit={async (data) => {
+            await createProvider(data);
+            refresh();
+          }}
+          existingProviders={providers}
+        />
+      </Suspense>
 
-      <PoolSetupWizardDialog
-        open={wizardOpen}
-        onOpenChange={setWizardOpen}
-        providers={providers}
-        unpooledProviders={unpooledProviders}
-        onSave={async (ownerId, data) => {
-          await updateProvider(ownerId, data);
-          refresh();
-        }}
-      />
+      <Suspense fallback={null}>
+        <PoolSetupWizardDialog
+          open={wizardOpen}
+          onOpenChange={setWizardOpen}
+          providers={providers}
+          unpooledProviders={unpooledProviders}
+          onSave={async (ownerId, data) => {
+            await updateProvider(ownerId, data);
+            refresh();
+          }}
+        />
+      </Suspense>
 
       <ConfirmDeleteDialog
         open={!!deleteTarget}

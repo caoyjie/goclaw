@@ -26,7 +26,7 @@ func TestParseReasoningConfigDefaultsToOff(t *testing.T) {
 
 func TestParseReasoningConfigUsesLegacyThinkingLevel(t *testing.T) {
 	agent := &AgentData{
-		OtherConfig: json.RawMessage(`{"thinking_level":"medium"}`),
+		ThinkingLevel: "medium",
 	}
 
 	got := agent.ParseReasoningConfig()
@@ -43,10 +43,8 @@ func TestParseReasoningConfigUsesLegacyThinkingLevel(t *testing.T) {
 
 func TestParseReasoningConfigPrefersAdvancedSettings(t *testing.T) {
 	agent := &AgentData{
-		OtherConfig: json.RawMessage(`{
-			"thinking_level": "high",
-			"reasoning": {"effort": "xhigh", "fallback": "provider_default"}
-		}`),
+		ThinkingLevel:   "high",
+		ReasoningConfig: json.RawMessage(`{"effort": "xhigh", "fallback": "provider_default"}`),
 	}
 
 	got := agent.ParseReasoningConfig()
@@ -66,10 +64,8 @@ func TestParseReasoningConfigPrefersAdvancedSettings(t *testing.T) {
 
 func TestParseReasoningConfigKeepsLegacyEffortWhenAdvancedOnlySetsFallback(t *testing.T) {
 	agent := &AgentData{
-		OtherConfig: json.RawMessage(`{
-			"thinking_level": "medium",
-			"reasoning": {"fallback": "off"}
-		}`),
+		ThinkingLevel:   "medium",
+		ReasoningConfig: json.RawMessage(`{"fallback": "off"}`),
 	}
 
 	got := agent.ParseReasoningConfig()
@@ -83,10 +79,8 @@ func TestParseReasoningConfigKeepsLegacyEffortWhenAdvancedOnlySetsFallback(t *te
 
 func TestParseReasoningConfigPreservesExplicitInherit(t *testing.T) {
 	agent := &AgentData{
-		OtherConfig: json.RawMessage(`{
-			"thinking_level": "high",
-			"reasoning": {"override_mode": "inherit"}
-		}`),
+		ThinkingLevel:   "high",
+		ReasoningConfig: json.RawMessage(`{"override_mode": "inherit"}`),
 	}
 
 	got := agent.ParseReasoningConfig()
@@ -162,11 +156,9 @@ func TestResolveEffectiveReasoningConfigPreservesCustomAgentReasoning(t *testing
 
 func TestParseChatGPTOAuthRoutingNormalizesNames(t *testing.T) {
 	agent := &AgentData{
-		OtherConfig: json.RawMessage(`{
-			"chatgpt_oauth_routing": {
-				"strategy": "round_robin",
-				"extra_provider_names": [" openai-codex-backup ", "", "openai-codex-backup", "openai-codex-team"]
-			}
+		ChatGPTOAuthRouting: json.RawMessage(`{
+			"strategy": "round_robin",
+			"extra_provider_names": [" openai-codex-backup ", "", "openai-codex-backup", "openai-codex-team"]
 		}`),
 	}
 
@@ -187,32 +179,43 @@ func TestParseChatGPTOAuthRoutingNormalizesNames(t *testing.T) {
 	}
 }
 
-func TestParseChatGPTOAuthRoutingFallsBackToManual(t *testing.T) {
-	agent := &AgentData{
-		OtherConfig: json.RawMessage(`{
-			"chatgpt_oauth_routing": {
-				"strategy": "something_else",
-				"extra_provider_names": ["openai-codex-backup"]
+func TestPublicChatGPTOAuthRoutingMigratesLegacyStrategiesToPriorityOrder(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		strategy string
+	}{
+		{name: "unknown", strategy: "something_else"},
+		{name: "manual", strategy: "manual"},
+		{name: "primary_first", strategy: "primary_first"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			agent := &AgentData{
+				ChatGPTOAuthRouting: json.RawMessage(`{
+					"strategy": "` + tc.strategy + `",
+					"extra_provider_names": ["openai-codex-backup"]
+				}`),
 			}
-		}`),
-	}
 
-	got := agent.ParseChatGPTOAuthRouting()
-	if got == nil {
-		t.Fatal("ParseChatGPTOAuthRouting() = nil, want config")
-	}
-	if got.Strategy != ChatGPTOAuthStrategyPrimaryFirst {
-		t.Fatalf("Strategy = %q, want %q", got.Strategy, ChatGPTOAuthStrategyPrimaryFirst)
+			got := agent.ParseChatGPTOAuthRouting()
+			if got == nil {
+				t.Fatal("ParseChatGPTOAuthRouting() = nil, want config")
+			}
+			public := PublicChatGPTOAuthRouting(got)
+			if public == nil {
+				t.Fatal("PublicChatGPTOAuthRouting() = nil, want config")
+			}
+			if public.Strategy != ChatGPTOAuthStrategyPriority {
+				t.Fatalf("Strategy = %q, want %q", public.Strategy, ChatGPTOAuthStrategyPriority)
+			}
+		})
 	}
 }
 
-func TestParseChatGPTOAuthRoutingManualWithoutExtrasPreservesExplicitSingleAccount(t *testing.T) {
+func TestPublicChatGPTOAuthRoutingCanonicalizesSingleAccountOverrideToPriorityOrder(t *testing.T) {
 	agent := &AgentData{
-		OtherConfig: json.RawMessage(`{
-			"chatgpt_oauth_routing": {
-				"strategy": "manual",
-				"extra_provider_names": []
-			}
+		ChatGPTOAuthRouting: json.RawMessage(`{
+			"strategy": "manual",
+			"extra_provider_names": []
 		}`),
 	}
 
@@ -223,17 +226,22 @@ func TestParseChatGPTOAuthRoutingManualWithoutExtrasPreservesExplicitSingleAccou
 	if got.OverrideMode != ChatGPTOAuthOverrideCustom {
 		t.Fatalf("OverrideMode = %q, want %q", got.OverrideMode, ChatGPTOAuthOverrideCustom)
 	}
-	if got.Strategy != ChatGPTOAuthStrategyPrimaryFirst {
-		t.Fatalf("Strategy = %q, want %q", got.Strategy, ChatGPTOAuthStrategyPrimaryFirst)
+	public := PublicChatGPTOAuthRouting(got)
+	if public == nil {
+		t.Fatal("PublicChatGPTOAuthRouting() = nil, want config")
+	}
+	if public.Strategy != ChatGPTOAuthStrategyPriority {
+		t.Fatalf("Strategy = %q, want %q", public.Strategy, ChatGPTOAuthStrategyPriority)
+	}
+	if got.ExtraProviderNames == nil {
+		t.Fatal("ExtraProviderNames = nil, want explicit empty slice preserved")
 	}
 }
 
 func TestParseChatGPTOAuthRoutingPreservesExplicitInheritMode(t *testing.T) {
 	agent := &AgentData{
-		OtherConfig: json.RawMessage(`{
-			"chatgpt_oauth_routing": {
-				"override_mode": "inherit"
-			}
+		ChatGPTOAuthRouting: json.RawMessage(`{
+			"override_mode": "inherit"
 		}`),
 	}
 
@@ -244,8 +252,12 @@ func TestParseChatGPTOAuthRoutingPreservesExplicitInheritMode(t *testing.T) {
 	if got.OverrideMode != ChatGPTOAuthOverrideInherit {
 		t.Fatalf("OverrideMode = %q, want %q", got.OverrideMode, ChatGPTOAuthOverrideInherit)
 	}
-	if got.Strategy != ChatGPTOAuthStrategyPrimaryFirst {
-		t.Fatalf("Strategy = %q, want %q", got.Strategy, ChatGPTOAuthStrategyPrimaryFirst)
+	public := PublicChatGPTOAuthRouting(got)
+	if public == nil {
+		t.Fatal("PublicChatGPTOAuthRouting() = nil, want config")
+	}
+	if public.Strategy != ChatGPTOAuthStrategyPriority {
+		t.Fatalf("Strategy = %q, want %q", public.Strategy, ChatGPTOAuthStrategyPriority)
 	}
 }
 
@@ -305,19 +317,40 @@ func TestResolveEffectiveChatGPTOAuthRoutingAllowsCustomSingleAccountToDisableDe
 		ExtraProviderNames: []string{"codex-work"},
 	}
 	override := &ChatGPTOAuthRoutingConfig{
-		OverrideMode: ChatGPTOAuthOverrideCustom,
-		Strategy:     ChatGPTOAuthStrategyPrimaryFirst,
+		OverrideMode:       ChatGPTOAuthOverrideCustom,
+		Strategy:           ChatGPTOAuthStrategyPriority,
+		ExtraProviderNames: []string{},
 	}
 
 	got := ResolveEffectiveChatGPTOAuthRouting(defaults, override)
 	if got == nil {
 		t.Fatal("ResolveEffectiveChatGPTOAuthRouting() = nil, want config")
 	}
-	if got.Strategy != ChatGPTOAuthStrategyPrimaryFirst {
-		t.Fatalf("Strategy = %q, want %q", got.Strategy, ChatGPTOAuthStrategyPrimaryFirst)
+	if got.Strategy != ChatGPTOAuthStrategyPriority {
+		t.Fatalf("Strategy = %q, want %q", got.Strategy, ChatGPTOAuthStrategyPriority)
 	}
 	if len(got.ExtraProviderNames) != 0 {
 		t.Fatalf("ExtraProviderNames = %#v, want empty", got.ExtraProviderNames)
+	}
+}
+
+func TestResolveEffectiveChatGPTOAuthRoutingRoundRobinEmptyExtrasKeepsDefaults(t *testing.T) {
+	defaults := &ChatGPTOAuthRoutingConfig{
+		Strategy:           ChatGPTOAuthStrategyRoundRobin,
+		ExtraProviderNames: []string{"codex-work"},
+	}
+	override := &ChatGPTOAuthRoutingConfig{
+		OverrideMode:       ChatGPTOAuthOverrideCustom,
+		Strategy:           ChatGPTOAuthStrategyRoundRobin,
+		ExtraProviderNames: []string{},
+	}
+
+	got := ResolveEffectiveChatGPTOAuthRouting(defaults, override)
+	if got == nil {
+		t.Fatal("ResolveEffectiveChatGPTOAuthRouting() = nil, want config")
+	}
+	if !reflect.DeepEqual(got.ExtraProviderNames, defaults.ExtraProviderNames) {
+		t.Fatalf("ExtraProviderNames = %#v, want %#v", got.ExtraProviderNames, defaults.ExtraProviderNames)
 	}
 }
 
@@ -360,5 +393,49 @@ func TestResolveEffectiveChatGPTOAuthRoutingIgnoresCustomMembersWhenProviderOwns
 	}
 	if !reflect.DeepEqual(got.ExtraProviderNames, defaults.ExtraProviderNames) {
 		t.Fatalf("ExtraProviderNames = %#v, want provider defaults %#v", got.ExtraProviderNames, defaults.ExtraProviderNames)
+	}
+}
+
+// ─── ParseAllowImageGeneration ────────────────────────────────────────────
+
+func TestParseAllowImageGeneration_DefaultTrue_NoOtherConfig(t *testing.T) {
+	ag := &AgentData{}
+	if !ag.ParseAllowImageGeneration() {
+		t.Error("empty other_config must default to true (image gen enabled)")
+	}
+}
+
+func TestParseAllowImageGeneration_DefaultTrue_EmptyObject(t *testing.T) {
+	ag := &AgentData{OtherConfig: json.RawMessage(`{}`)}
+	if !ag.ParseAllowImageGeneration() {
+		t.Error("empty JSONB object must default to true")
+	}
+}
+
+func TestParseAllowImageGeneration_ExplicitTrue(t *testing.T) {
+	ag := &AgentData{OtherConfig: json.RawMessage(`{"allow_image_generation":true}`)}
+	if !ag.ParseAllowImageGeneration() {
+		t.Error("explicit true must return true")
+	}
+}
+
+func TestParseAllowImageGeneration_ExplicitFalse(t *testing.T) {
+	ag := &AgentData{OtherConfig: json.RawMessage(`{"allow_image_generation":false}`)}
+	if ag.ParseAllowImageGeneration() {
+		t.Error("explicit false must return false")
+	}
+}
+
+func TestParseAllowImageGeneration_MalformedJSON_DefaultsTrue(t *testing.T) {
+	ag := &AgentData{OtherConfig: json.RawMessage(`{not-json`)}
+	if !ag.ParseAllowImageGeneration() {
+		t.Error("malformed other_config must default to true")
+	}
+}
+
+func TestParseAllowImageGeneration_UnrelatedKeys_DefaultsTrue(t *testing.T) {
+	ag := &AgentData{OtherConfig: json.RawMessage(`{"self_evolve":true,"skill_evolve":false}`)}
+	if !ag.ParseAllowImageGeneration() {
+		t.Error("other_config without allow_image_generation key must default to true")
 	}
 }
