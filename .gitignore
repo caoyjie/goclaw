@@ -8,7 +8,7 @@ pkg-helper
 # IDE
 .idea/
 .vscode/
-
+codex-session.txt
 # OS
 .DS_Store
 ._*

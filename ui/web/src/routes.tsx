@@ -120,11 +120,14 @@ const HooksPage = lazyWithRetry(() =>
 const TenantSelectorPage = lazyWithRetry(() =>
   import("@/pages/login/tenant-selector").then((m) => ({ default: m.TenantSelectorPage })),
 );
+const MediaStudioPage = lazyWithRetry(() =>
+  import("@/pages/media-studio/media-studio-page").then((m) => ({ default: m.MediaStudioPage })),
+);
 
 function PageLoader() {
   return (
     <div className="flex h-full items-center justify-center">
-      <img src="/goclaw-icon.svg" alt="" className="h-8 w-8 animate-pulse opacity-50" />
+      <span className="text-sm font-semibold text-primary animate-pulse">CEO IP 助手</span>
     </div>
   );
 }
@@ -207,6 +210,7 @@ export function AppRoutes() {
           <Route path={ROUTES.MEMORY} element={<MemoryPage />} />
           <Route path={ROUTES.VAULT} element={<VaultPage />} />
           <Route path={ROUTES.KNOWLEDGE_GRAPH} element={<KnowledgeGraphPage />} />
+          <Route path={ROUTES.MEDIA_STUDIO} element={<MediaStudioPage />} />
         </Route>
 
         {/* Catch-all → overview */}

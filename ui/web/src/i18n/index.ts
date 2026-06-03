@@ -128,9 +128,8 @@ const STORAGE_KEY = "goclaw:language";
 
 function getInitialLanguage(): string {
   const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored === "en" || stored === "vi" || stored === "zh") return stored;
+  if (stored === "en" || stored === "zh") return stored;
   const lang = navigator.language.toLowerCase();
-  if (lang.startsWith("vi")) return "vi";
   if (lang.startsWith("zh")) return "zh";
   return "en";
 }

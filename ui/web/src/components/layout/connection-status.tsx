@@ -4,10 +4,10 @@ import { cn } from "@/lib/utils";
 import { cleanVersion } from "@/lib/clean-version";
 
 const ROLE_STYLES: Record<string, string> = {
-  admin: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
-  owner: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
-  operator: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  viewer: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
+  admin: "bg-white/20 text-white",
+  owner: "bg-white/20 text-white",
+  operator: "bg-white/20 text-white",
+  viewer: "bg-white/20 text-white",
 };
 
 export function ConnectionStatus({ collapsed }: { collapsed?: boolean }) {
@@ -22,7 +22,7 @@ export function ConnectionStatus({ collapsed }: { collapsed?: boolean }) {
       {/* Tenant + role (expanded only) */}
       {!collapsed && tenantName && (
         <div className="flex items-center justify-between gap-1.5 text-xs overflow-hidden">
-          <span className="truncate font-medium text-foreground/80">{tenantName}</span>
+          <span className="truncate font-medium text-sidebar-foreground/90">{tenantName}</span>
           {role && (
             <span className={cn("shrink-0 rounded-full px-1.5 py-0.5 text-2xs font-medium", ROLE_STYLES[role] ?? ROLE_STYLES.viewer)}>
               {role}
@@ -32,7 +32,7 @@ export function ConnectionStatus({ collapsed }: { collapsed?: boolean }) {
       )}
 
       {/* Connection status */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground overflow-hidden">
+      <div className="flex items-center gap-2 text-xs text-sidebar-foreground/85 overflow-hidden">
         <span
           className={cn(
             "h-2 w-2 shrink-0 rounded-full",

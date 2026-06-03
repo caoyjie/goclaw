@@ -47,4 +47,5 @@ export const ROUTES = {
   SELECT_TENANT: "/select-tenant",
   HOOKS: "/hooks",
   HOOK_DETAIL: "/hooks/:id",
+  MEDIA_STUDIO: "/media-studio",
 } as const;

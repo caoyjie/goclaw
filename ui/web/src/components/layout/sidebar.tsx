@@ -30,6 +30,7 @@ import {
   FileArchive,
   DatabaseBackup,
   Webhook,
+  Clapperboard,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { SidebarGroup } from "./sidebar-group";
@@ -66,18 +67,19 @@ export function Sidebar({ collapsed, onNavItemClick }: SidebarProps) {
         }
       }}
     >
-      {/* Logo / title */}
+      {/* Title */}
       <div className="flex h-14 items-center border-b px-4">
         {!collapsed && (
-          <div className="flex items-center gap-2.5">
-            <img src="/goclaw-icon.svg" alt="GoClaw" className="h-8 w-8" />
-            <span className="text-lg font-bold tracking-tight text-sidebar-primary">
-              GoClaw
+          <div className="flex items-center">
+            <span className="text-lg font-bold tracking-tight text-sidebar-foreground">
+              CEO IP 助手
             </span>
           </div>
         )}
         {collapsed && (
-          <img src="/goclaw-icon.svg" alt="GoClaw" className="mx-auto h-7 w-7" />
+          <span className="mx-auto text-xs font-semibold tracking-wide text-sidebar-foreground">
+            CEO
+          </span>
         )}
       </div>
 
@@ -102,6 +104,7 @@ export function Sidebar({ collapsed, onNavItemClick }: SidebarProps) {
         </SidebarGroup>
 
         <SidebarGroup label={t("groups.capabilities")} collapsed={collapsed}>
+          <SidebarItem to={ROUTES.MEDIA_STUDIO} icon={Clapperboard} label={t("nav.mediaStudio")} collapsed={collapsed} />
           <SidebarItem to={ROUTES.SKILLS} icon={Zap} label={t("nav.skills")} collapsed={collapsed} />
           <SidebarItem to={ROUTES.BUILTIN_TOOLS} icon={Package} label={t("nav.builtinTools")} collapsed={collapsed} />
           <SidebarItem to={ROUTES.MCP} icon={Plug} label={t("nav.mcpServers")} collapsed={collapsed} />

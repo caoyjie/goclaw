@@ -3,8 +3,11 @@
 # ── Stage 1: Build ──
 FROM node:22-alpine AS builder
 
-RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
-
+RUN corepack enable \
+ && corepack prepare pnpm@10.28.2 --activate \
+ && pnpm config set registry http://mirrors.cloud.tencent.com/npm/
+ENV COREPACK_NPM_REGISTRY=http://mirrors.cloud.tencent.com/npm/
+ENV GOPROXY=https://goproxy.cn,direct
 WORKDIR /app
 
 # Cache dependencies
@@ -18,9 +21,8 @@ RUN pnpm build
 # ── Stage 2: Serve ──
 FROM nginx:1.27-alpine
 
-# Copy built assets — force 0755 so the nginx worker (non-root) can read them
-# regardless of pnpm's build-time umask (see #761).
-COPY --chmod=0755 --from=builder /app/dist /usr/share/nginx/html
+# Copy built assets
+COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf

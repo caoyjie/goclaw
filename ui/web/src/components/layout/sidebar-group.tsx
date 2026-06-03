@@ -10,7 +10,7 @@ export function SidebarGroup({ label, collapsed, children }: SidebarGroupProps) 
   return (
     <div className="space-y-1">
       {!collapsed && (
-        <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground/80">
           {label}
         </p>
       )}
