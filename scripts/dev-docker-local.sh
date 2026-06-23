@@ -10,6 +10,7 @@ COMPOSE_FILES=(
   -f docker-compose.browser.yml
   -f docker-compose.otel.yml
   -f docker-compose.redis.yml
+  -f docker-compose.sandbox-ceo.yml
 )
 
 UPGRADE_FILES=(
@@ -127,7 +128,6 @@ endpoints() {
 GoClaw WebUI:   http://localhost:18790
 Health Check:   http://localhost:18790/health
 Jaeger (OTEL):  http://localhost:16686
-ComfyUI:        http://localhost:8188
 EOM
 }
 
