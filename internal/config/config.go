@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strings"
 	"sync"
 	"time"
@@ -72,9 +73,8 @@ type Config struct {
 // empty string → default 1h.
 //
 // ScratchDir is the tmp workspace used by the update executor for download
-// + extract + staging before atomic swap. Defaults to "{BinDir}/../tmp" when
-// empty; operators MAY set explicitly to avoid symlink-resolution issues
-// (red-team H6).
+// + extract + staging before atomic swap. Empty or unusable values fall back to
+// "{runtimeDir}/tmp"; operators MAY set an explicit writable path.
 type PackagesConfig struct {
 	GitHubToken     string `json:"github_token,omitempty"`      // Phase 2 stub
 	UpdatesCheckTTL string `json:"updates_check_ttl,omitempty"` // e.g. "1h"
@@ -133,7 +133,7 @@ type DatabaseConfig struct {
 type SkillsConfig struct {
 	StorageDir      string                  `json:"storage_dir,omitempty"`        // directory for skill content (default: dataDir/skills-store/)
 	MaxUploadSizeMB int                     `json:"max_upload_size_mb,omitempty"` // per-file ZIP upload limit
-	SlashCommands   SkillSlashCommandConfig `json:"slash_commands,omitempty"`
+	SlashCommands   SkillSlashCommandConfig `json:"slash_commands"`
 }
 
 // SkillSlashCommandConfig controls explicit slash-command skill activation.
@@ -265,6 +265,7 @@ type CompactionConfig struct {
 	ReserveTokensFloor int                `json:"reserveTokensFloor,omitempty"` // min reserve tokens (default 20000)
 	MaxHistoryShare    float64            `json:"maxHistoryShare,omitempty"`    // max share of context for history (default 0.85)
 	KeepLastMessages   int                `json:"keepLastMessages,omitempty"`   // messages to keep after compaction (default 4)
+	TimeoutSeconds     int                `json:"timeoutSeconds,omitempty"`     // summarization timeout in seconds (default 120)
 	MemoryFlush        *MemoryFlushConfig `json:"memoryFlush,omitempty"`        // pre-compaction flush
 }
 
@@ -479,10 +480,15 @@ type CronConfig struct {
 	RetryMaxDelay   string `json:"retry_max_delay,omitempty"`  // maximum backoff delay (default "30s", Go duration)
 	DefaultTimezone string `json:"default_timezone,omitempty"` // IANA timezone for cron expressions when not set per-job (e.g. "Asia/Ho_Chi_Minh")
 	JobTimeout      string `json:"job_timeout,omitempty"`      // max duration per cron job execution (default "10m", Go duration)
+	CommandEnabled  bool   `json:"command_enabled,omitempty"`  // allow deterministic shell-command cron payloads (kind="command"). Default false. These run inside the gateway process with its privileges — enable only on trusted deployments.
+	CommandTimeout  string `json:"command_timeout,omitempty"`  // default per-command wall-clock timeout when a job sets none (default "5m", Go duration)
 }
 
 // DefaultJobTimeout is the fallback timeout for cron job execution.
 const DefaultJobTimeout = 10 * time.Minute
+
+// DefaultCommandTimeout is the fallback per-command timeout for command cron payloads.
+const DefaultCommandTimeout = 5 * time.Minute
 
 // JobTimeoutDuration returns the configured job timeout or the default (10m).
 func (cc CronConfig) JobTimeoutDuration() time.Duration {
@@ -494,6 +500,19 @@ func (cc CronConfig) JobTimeoutDuration() time.Duration {
 		slog.Warn("cron: invalid job_timeout, using default", "value", cc.JobTimeout, "default", DefaultJobTimeout)
 	}
 	return DefaultJobTimeout
+}
+
+// CommandTimeoutDuration returns the configured default per-command timeout or
+// the default (5m). A per-job timeoutSeconds, when set, overrides this.
+func (cc CronConfig) CommandTimeoutDuration() time.Duration {
+	if cc.CommandTimeout != "" {
+		d, err := time.ParseDuration(cc.CommandTimeout)
+		if err == nil && d > 0 {
+			return d
+		}
+		slog.Warn("cron: invalid command_timeout, using default", "value", cc.CommandTimeout, "default", DefaultCommandTimeout)
+	}
+	return DefaultCommandTimeout
 }
 
 // ToRetryConfig converts CronConfig to cron.RetryConfig with defaults applied.
@@ -564,6 +583,36 @@ func (c *Config) ReplaceFrom(src *Config) {
 	c.Telemetry = src.Telemetry
 	c.Tailscale = src.Tailscale
 	c.Bindings = src.Bindings
+}
+
+// Clone returns a deep copy of the config while holding the read lock.
+func (c *Config) Clone() *Config {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	data, err := json.Marshal(c)
+	if err != nil {
+		return &Config{}
+	}
+	cp := Default()
+	if err := json.Unmarshal(data, cp); err != nil {
+		return &Config{}
+	}
+	return cp
+}
+
+// ShellDenyGroupsSnapshot returns a copy of the current global shell deny-group
+// overrides. Callers can safely resolve patterns without racing config reloads.
+func (c *Config) ShellDenyGroupsSnapshot() map[string]bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if len(c.Tools.ShellDenyGroups) == 0 {
+		return nil
+	}
+	groups := make(map[string]bool, len(c.Tools.ShellDenyGroups))
+	maps.Copy(groups, c.Tools.ShellDenyGroups)
+	return groups
 }
 
 // IdentityConfig defines agent persona / display identity.

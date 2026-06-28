@@ -113,6 +113,9 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 		waitToolCfg = l.agentToolPolicy.Wait
 		ctx = tools.WithWaitToolConfig(ctx, waitToolCfg)
 	}
+	if l.agentToolPolicy != nil && l.agentToolPolicy.RateLimitPerHour > 0 {
+		ctx = tools.WithToolRateLimitOverride(ctx, l.agentToolPolicy.RateLimitPerHour)
+	}
 	if l.sandboxCfg != nil {
 		ctx = tools.WithSandboxConfig(ctx, l.sandboxCfg)
 	}
@@ -378,6 +381,8 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 		AgentKey:            l.id,
 		TenantID:            l.tenantID,
 		UserID:              req.UserID,
+		RunID:               req.RunID,
+		SessionKey:          req.SessionKey,
 		CredentialUserID:    credUserID,
 		AgentType:           l.agentType,
 		SenderID:            req.SenderID,
@@ -388,6 +393,7 @@ func (l *Loop) injectContext(ctx context.Context, req *RunRequest) (contextSetup
 		SharedContext:       store.IsSharedContext(ctx),
 		RestrictToWorkspace: l.restrictToWs != nil && *l.restrictToWs,
 		BuiltinToolSettings: l.builtinToolSettings,
+		Channel:             req.Channel,
 		ChannelType:         req.ChannelType,
 		SubagentsCfg:        l.subagentsCfg,
 		ParentModel:         l.model,

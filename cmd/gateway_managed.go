@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"strings"
+	"time"
 
 	"github.com/nextlevelbuilder/goclaw/internal/agent"
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
@@ -60,6 +61,7 @@ func wireExtras(
 	redisClient any, // nil when built without -tags redis or when Redis is unconfigured
 	domainBus eventbus.DomainEventBus,
 	usageCapSvc *usagecaps.Service,
+	mcpOAuthProvider mcpbridge.OAuthTokenProvider, // nil = OAuth injection disabled
 ) (*tools.ContextFileInterceptor, *mcpbridge.Pool, *media.Store, tools.PostTurnProcessor) {
 	// 1. Build cache instances (in-memory or Redis depending on build tags)
 	agentCtxCache, userCtxCache := makeCaches(redisClient)
@@ -86,6 +88,12 @@ func wireExtras(
 		// Register media analysis tools (need mediaStore for file access).
 		readDocumentTool := tools.NewReadDocumentTool(providerReg, mediaStore)
 		readDocumentTool.SetUsageCapService(usageCapSvc)
+		readDocumentTool.SetLocalParser(tools.NewLocalExtractParser(tools.LocalExtractConfig{
+			Enabled:    appCfg.Tools.DocumentParser.LocalFirstEnabled(),
+			MaxPages:   appCfg.Tools.DocumentParser.MaxPages,
+			Timeout:    time.Duration(appCfg.Tools.DocumentParser.TimeoutSec) * time.Second,
+			MinTextLen: appCfg.Tools.DocumentParser.MinTextLen,
+		}))
 		toolsReg.Register(readDocumentTool)
 		readAudioTool := tools.NewReadAudioTool(providerReg, mediaStore)
 		readAudioTool.SetUsageCapService(usageCapSvc)
@@ -197,6 +205,18 @@ func wireExtras(
 		sharedHookHandlers = handlers
 		slog.Info("agent hooks dispatcher wired", "handlers", "command,http,prompt")
 	}
+	timelineRecorder := agent.NewRunTimelineRecorder(stores.RunTimeline)
+	// Reconcile runs left mid-execution by a previous gateway stop. A run whose
+	// process was killed never emits its terminal run.status, so it would show as
+	// perpetually "running" and never be recorded as failed. Mark such runs failed
+	// on startup, mirroring the cron scheduler's stale-'running' reset.
+	if stores.RunTimeline != nil {
+		if n, err := stores.RunTimeline.RecoverInterruptedRuns(context.Background()); err != nil {
+			slog.Warn("run timeline: failed to recover interrupted runs on startup", "error", err)
+		} else if n > 0 {
+			slog.Info("run timeline: marked interrupted runs as failed on startup", "count", n)
+		}
+	}
 
 	resolver := agent.NewManagedResolver(agent.ResolverDeps{
 		AgentStore:             stores.Agents,
@@ -208,7 +228,9 @@ func wireExtras(
 		Tools:                  toolsReg,
 		ToolPolicy:             toolPE,
 		Skills:                 skillsLoader,
+		SkillStore:             stores.Skills,
 		SkillAccessStore:       skillAccessStore,
+		SkillEvolutionStore:    stores.SkillEvolution,
 		SkillSlashCommands:     appCfg.Skills.SlashCommands,
 		HasMemory:              hasMemory,
 		TraceCollector:         traceCollector,
@@ -233,11 +255,13 @@ func wireExtras(
 		MCPStore:               stores.MCP,
 		MCPPool:                mcpPool,
 		MCPGrantChecker:        mcpGrantChecker,
+		MCPOAuthTokenProvider:  mcpOAuthProvider,
 		ConfigPermStore:        stores.ConfigPermissions,
 		MediaStore:             mediaStore,
 		ModelPricing:           appCfg.Telemetry.ModelPricing,
 		TracingStore:           stores.Tracing,
 		UsageCaps:              usageCapSvc,
+		UsageEvents:            stores.UsageEvents,
 		MemoryStore:            stores.Memory,
 		ContactStore:           stores.Contacts,
 		TenantStore:            stores.Tenants,
@@ -292,6 +316,7 @@ func wireExtras(
 				Payload:  event,
 				TenantID: event.TenantID,
 			})
+			timelineRecorder.Record(event)
 		},
 	})
 	agentRouter.SetResolver(resolver)
@@ -523,7 +548,9 @@ func wireExtras(
 		agentRouter.InvalidateAll()
 	})
 
-	// MCP cache: invalidate all agent caches when MCP servers/grants change
+	// MCP cache: invalidate all agent caches + per-user pool connections when MCP servers/grants change.
+	// Per-user pool connections hold stale credentials/headers; evicting them forces a fresh
+	// AcquireUser on next request so new OAuth tokens and grant changes take effect immediately.
 	msgBus.Subscribe(bus.TopicCacheMCP, func(event bus.Event) {
 		if event.Name != protocol.EventCacheInvalidate {
 			return
@@ -533,6 +560,9 @@ func wireExtras(
 			return
 		}
 		agentRouter.InvalidateAll()
+		if mcpPool != nil {
+			mcpPool.EvictAllUsers()
+		}
 	})
 
 	// Cron cache: invalidate job cache on cron changes
@@ -694,7 +724,7 @@ func wireExtras(
 		}
 		providerReg.UnregisterForTenant(tenantID, p.Name)
 		if p.Enabled {
-			registerACPFromDB(providerReg, *p)
+			registerACPFromDB(providerReg, *p, configuredShellDenyGroups(appCfg))
 		}
 	})
 

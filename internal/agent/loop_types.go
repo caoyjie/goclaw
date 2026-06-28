@@ -139,11 +139,12 @@ type Loop struct {
 	userSetups        sync.Map            // userID → *userSetup (workspace + seeding state, per Loop instance)
 
 	// Per-user MCP tools: servers requiring user credentials get connected per-request.
-	mcpStore        store.MCPServerStore   // for credential lookup
-	mcpPool         *mcpbridge.Pool        // user-keyed connection pool
-	mcpUserCredSrvs []store.MCPAccessInfo  // servers needing per-user creds
-	mcpUserTools    sync.Map               // userID → []tools.Tool (cached per-user tools)
-	mcpGrantChecker mcpbridge.GrantChecker // runtime grant verification (nil = skip)
+	mcpStore              store.MCPServerStore         // for credential lookup
+	mcpPool               *mcpbridge.Pool              // user-keyed connection pool
+	mcpUserCredSrvs       []store.MCPAccessInfo        // servers needing per-user creds
+	mcpUserTools          sync.Map                     // userID → []tools.Tool (cached per-user tools)
+	mcpGrantChecker       mcpbridge.GrantChecker       // runtime grant verification (nil = skip)
+	mcpOAuthTokenProvider mcpbridge.OAuthTokenProvider // OAuth Bearer token injection (nil = disabled)
 
 	// Compaction config (memory flush settings)
 	compactionCfg *config.CompactionConfig
@@ -243,6 +244,7 @@ type Loop struct {
 	budgetMonthlyCents int
 	tracingStore       store.TracingStore
 	usageCaps          *usagecaps.Service
+	usageEvents        store.UsageEventStore
 
 	// Memory store for extractive memory fallback (writes directly when LLM flush fails)
 	memStore store.MemoryStore
@@ -253,6 +255,10 @@ type Loop struct {
 
 	// v3 evolution metrics store (nil = disabled)
 	evolutionMetricsStore store.EvolutionMetricsStore
+
+	// Skill self-evolution metrics store (nil = disabled)
+	skillEvolutionStore store.SkillEvolutionStore
+	skillStore          store.SkillStore
 
 	// User identity resolver: maps channel contacts to merged tenant users for credential lookups.
 	userResolver UserIdentityResolver
@@ -437,15 +443,17 @@ type LoopConfig struct {
 	BudgetMonthlyCents int
 	TracingStore       store.TracingStore
 	UsageCaps          *usagecaps.Service
+	UsageEvents        store.UsageEventStore
 
 	// Memory store for extractive memory fallback (writes directly when LLM flush fails)
 	MemoryStore store.MemoryStore
 
 	// Per-user MCP tools (servers requiring per-user credentials)
-	MCPStore        store.MCPServerStore   // for credential lookup
-	MCPPool         *mcpbridge.Pool        // user-keyed connection pool
-	MCPUserCredSrvs []store.MCPAccessInfo  // servers needing per-user creds
-	MCPGrantChecker mcpbridge.GrantChecker // runtime grant verification (nil = skip)
+	MCPStore              store.MCPServerStore      // for credential lookup
+	MCPPool               *mcpbridge.Pool           // user-keyed connection pool
+	MCPUserCredSrvs       []store.MCPAccessInfo     // servers needing per-user creds
+	MCPGrantChecker       mcpbridge.GrantChecker    // runtime grant verification (nil = skip)
+	MCPOAuthTokenProvider mcpbridge.OAuthTokenProvider // OAuth Bearer token injection (nil = disabled)
 
 	// V3 orchestration mode (resolved by resolver, controls tool visibility)
 	OrchMode        OrchestrationMode
@@ -453,6 +461,10 @@ type LoopConfig struct {
 
 	// V3 evolution metrics store for recording tool/retrieval/feedback metrics
 	EvolutionMetricsStore store.EvolutionMetricsStore
+
+	// Skill self-evolution metrics store for use_skill/slash activation metrics
+	SkillEvolutionStore store.SkillEvolutionStore
+	SkillStore          store.SkillStore
 
 	// User identity resolver for credential lookups (maps channel contacts → tenant users)
 	UserResolver UserIdentityResolver
@@ -578,14 +590,18 @@ func NewLoop(cfg LoopConfig) *Loop {
 		budgetMonthlyCents:     cfg.BudgetMonthlyCents,
 		tracingStore:           cfg.TracingStore,
 		usageCaps:              cfg.UsageCaps,
+		usageEvents:            cfg.UsageEvents,
 		memStore:               cfg.MemoryStore,
 		mcpStore:               cfg.MCPStore,
 		mcpPool:                cfg.MCPPool,
 		mcpUserCredSrvs:        cfg.MCPUserCredSrvs,
 		mcpGrantChecker:        cfg.MCPGrantChecker,
+		mcpOAuthTokenProvider:  cfg.MCPOAuthTokenProvider,
 		orchMode:               cfg.OrchMode,
 		delegateTargets:        cfg.DelegateTargets,
 		evolutionMetricsStore:  cfg.EvolutionMetricsStore,
+		skillEvolutionStore:    cfg.SkillEvolutionStore,
+		skillStore:             cfg.SkillStore,
 		userResolver:           cfg.UserResolver,
 	}
 }
@@ -671,6 +687,7 @@ type RunResult struct {
 type MediaResult struct {
 	Path        string `json:"path"`                   // local file path
 	ContentType string `json:"content_type,omitempty"` // MIME type
+	Caption     string `json:"caption,omitempty"`      // optional outbound caption
 	Size        int64  `json:"size,omitempty"`         // file size in bytes
 	AsVoice     bool   `json:"as_voice,omitempty"`     // send as voice message (Telegram OGG)
 	// Prompt is the generation prompt for AI-generated media (e.g. create_image).

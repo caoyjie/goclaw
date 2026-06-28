@@ -84,9 +84,14 @@ type ResolverDeps struct {
 	// MCP grant checker — for runtime grant verification at BridgeTool.Execute
 	MCPGrantChecker mcpbridge.GrantChecker
 
+	// MCP OAuth token provider — injects Bearer tokens for OAuth-enabled MCP servers
+	MCPOAuthTokenProvider mcpbridge.OAuthTokenProvider
+
 	// Skill access store — for per-agent skill visibility filtering
-	SkillAccessStore   store.SkillAccessStore
-	SkillSlashCommands config.SkillSlashCommandConfig
+	SkillAccessStore    store.SkillAccessStore
+	SkillStore          store.SkillStore
+	SkillEvolutionStore store.SkillEvolutionStore
+	SkillSlashCommands  config.SkillSlashCommandConfig
 
 	// Config permission store for group file writer checks
 	ConfigPermStore store.ConfigPermissionStore
@@ -100,6 +105,7 @@ type ResolverDeps struct {
 	// Tracing store for budget enforcement queries
 	TracingStore store.TracingStore
 	UsageCaps    *usagecaps.Service
+	UsageEvents  store.UsageEventStore
 
 	// Memory store for extractive memory fallback
 	MemoryStore store.MemoryStore
@@ -315,6 +321,9 @@ func NewManagedResolver(deps ResolverDeps) ResolverFunc {
 			}
 			if deps.MCPGrantChecker != nil {
 				mcpOpts = append(mcpOpts, mcpbridge.WithGrantChecker(deps.MCPGrantChecker))
+			}
+			if deps.MCPOAuthTokenProvider != nil {
+				mcpOpts = append(mcpOpts, mcpbridge.WithOAuthTokenProvider(deps.MCPOAuthTokenProvider))
 			}
 			mcpMgr := mcpbridge.NewManager(toolsReg, mcpOpts...)
 			if err := mcpMgr.LoadForAgent(ctx, ag.ID, ""); err != nil {
@@ -534,14 +543,18 @@ func NewManagedResolver(deps ResolverDeps) ResolverFunc {
 			BudgetMonthlyCents:     derefInt(ag.BudgetMonthlyCents),
 			TracingStore:           deps.TracingStore,
 			UsageCaps:              deps.UsageCaps,
+			UsageEvents:            deps.UsageEvents,
 			MemoryStore:            deps.MemoryStore,
 			MCPStore:               deps.MCPStore,
 			MCPPool:                deps.MCPPool,
 			MCPUserCredSrvs:        mcpUserCredSrvs,
 			MCPGrantChecker:        deps.MCPGrantChecker,
+			MCPOAuthTokenProvider:  deps.MCPOAuthTokenProvider,
 			OrchMode:               orchMode,
 			DelegateTargets:        delegateTargets,
 			EvolutionMetricsStore:  evoMetricsStore,
+			SkillEvolutionStore:    deps.SkillEvolutionStore,
+			SkillStore:             deps.SkillStore,
 			UserResolver:           newContactResolver(deps.ContactStore),
 		})
 

@@ -48,6 +48,7 @@ export const ROUTES = {
   HOOKS: "/hooks",
   HOOK_DETAIL: "/hooks/:id",
   MEDIA_STUDIO: "/media-studio",
+  WEBHOOKS: "/webhooks",
   WORKSTATIONS: "/workstations",
   WORKSTATION_DETAIL: "/workstations/:id",
 } as const;
