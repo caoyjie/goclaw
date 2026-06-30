@@ -62,6 +62,7 @@ func wireExtras(
 	domainBus eventbus.DomainEventBus,
 	usageCapSvc *usagecaps.Service,
 	mcpOAuthProvider mcpbridge.OAuthTokenProvider, // nil = OAuth injection disabled
+	remoteMedia agent.RemoteMediaProcessor,
 ) (*tools.ContextFileInterceptor, *mcpbridge.Pool, *media.Store, tools.PostTurnProcessor) {
 	// 1. Build cache instances (in-memory or Redis depending on build tags)
 	agentCtxCache, userCtxCache := makeCaches(redisClient)
@@ -256,6 +257,7 @@ func wireExtras(
 		MCPPool:                mcpPool,
 		MCPGrantChecker:        mcpGrantChecker,
 		MCPOAuthTokenProvider:  mcpOAuthProvider,
+		RemoteMedia:            remoteMedia,
 		ConfigPermStore:        stores.ConfigPermissions,
 		MediaStore:             mediaStore,
 		ModelPricing:           appCfg.Telemetry.ModelPricing,

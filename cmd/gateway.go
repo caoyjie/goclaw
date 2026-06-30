@@ -384,11 +384,19 @@ func runGateway() {
 	if pgStores != nil && pgStores.MCPOAuthTokens != nil {
 		mcpOAuthRefresher = mcpoauth.NewRefresher(pgStores.MCPOAuthTokens, security.NewSafeClient(15*time.Second))
 	}
+	remoteMediaSvc, err := buildRemoteMediaService(context.Background(), cfg)
+	if err != nil {
+		slog.Error("remote media bridge configuration invalid", "error", err)
+		os.Exit(1)
+	}
+	if remoteMediaSvc != nil {
+		slog.Info("remote media bridge enabled", "provider", cfg.Media.ObjectStorage.Provider, "bucket", cfg.Media.ObjectStorage.Bucket, "url_mode", cfg.Media.ObjectStorage.URLMode)
+	}
 
 	var mcpPool *mcpbridge.Pool
 	var mediaStore *media.Store
 	var postTurn tools.PostTurnProcessor
-	contextFileInterceptor, mcpPool, mediaStore, postTurn = wireExtras(pgStores, agentRouter, providerRegistry, modelReg, msgBus, pgStores.Sessions, toolsReg, toolPE, skillsLoader, hasMemory, traceCollector, workspace, cfg.Gateway.InjectionAction, cfg, sandboxMgr, redisClient, domainBus, usageCapSvc, mcpOAuthRefresher)
+	contextFileInterceptor, mcpPool, mediaStore, postTurn = wireExtras(pgStores, agentRouter, providerRegistry, modelReg, msgBus, pgStores.Sessions, toolsReg, toolPE, skillsLoader, hasMemory, traceCollector, workspace, cfg.Gateway.InjectionAction, cfg, sandboxMgr, redisClient, domainBus, usageCapSvc, mcpOAuthRefresher, remoteMediaSvc)
 	if mcpPool != nil {
 		defer mcpPool.Stop()
 	}

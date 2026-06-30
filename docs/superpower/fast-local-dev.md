@@ -85,7 +85,7 @@ cd ui/web && pnpm dev
 |---|---|---|---|
 | `quick --no-ui` | Rebuild Go only, restart goclaw | Go source changed, UI unchanged or running via pnpm dev | ~20–40s |
 | `quick` | Rebuild Go + embed UI, restart goclaw | Go + UI, want single-port result | ~30–60s |
-| `deploy` | Like `quick` but pulls latest base images, also starts comfyui | Pre-release / CI-like build | ~2–3 min |
+| `deploy [backend|frontend]` | Ensures postgres/browser/redis/otel are up, rebuilds goclaw, then migrates. `backend` skips embedded UI; `frontend` rebuilds embedded UI. | Pre-release / CI-like build | ~2–3 min |
 | `start` | Full build of all services from scratch | First time, or after `down` | ~5+ min |
 | `migrate` | Run DB migrations only | Schema changed, binary already up to date | seconds |
 | `logs` | Tail goclaw container logs | Debugging runtime behavior | — |

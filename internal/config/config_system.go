@@ -22,6 +22,18 @@ func (c *Config) ApplySystemConfigs(configs map[string]string) {
 			}
 		}
 	}
+	integer64 := func(key string, dst *int64) {
+		if v, ok := configs[key]; ok && v != "" {
+			if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+				*dst = n
+			}
+		}
+	}
+	boolValue := func(key string, dst *bool) {
+		if v, ok := configs[key]; ok && v != "" {
+			*dst = v == "true" || v == "1"
+		}
+	}
 	boolean := func(key string, dst **bool) {
 		if v, ok := configs[key]; ok && v != "" {
 			b := v == "true" || v == "1"
@@ -64,11 +76,6 @@ func (c *Config) ApplySystemConfigs(configs map[string]string) {
 	str("tools.profile", &c.Tools.Profile)
 	integer("tools.rate_limit_per_hour", &c.Tools.RateLimitPerHour)
 	boolean("tools.scrub_credentials", &c.Tools.ScrubCredentials)
-	boolValue := func(key string, dst *bool) {
-		if v, ok := configs[key]; ok && v != "" {
-			*dst = v == "true" || v == "1"
-		}
-	}
 	boolValue("tools.browser.enabled", &c.Tools.Browser.Enabled)
 	boolValue("tools.browser.headless", &c.Tools.Browser.Headless)
 	str("tools.browser.remote_url", &c.Tools.Browser.RemoteURL)
@@ -91,6 +98,25 @@ func (c *Config) ApplySystemConfigs(configs map[string]string) {
 	str("tts.mode", &c.Tts.Mode)
 	integer("tts.max_length", &c.Tts.MaxLength)
 	integer("tts.timeout_ms", &c.Tts.TimeoutMs)
+
+	// Media object storage
+	boolValue("media.object_storage.enabled", &c.Media.ObjectStorage.Enabled)
+	str("media.object_storage.provider", &c.Media.ObjectStorage.Provider)
+	str("media.object_storage.bucket", &c.Media.ObjectStorage.Bucket)
+	str("media.object_storage.endpoint", &c.Media.ObjectStorage.Endpoint)
+	str("media.object_storage.region", &c.Media.ObjectStorage.Region)
+	str("media.object_storage.prefix", &c.Media.ObjectStorage.Prefix)
+	str("media.object_storage.url_mode", &c.Media.ObjectStorage.URLMode)
+	str("media.object_storage.public_base_url", &c.Media.ObjectStorage.PublicBaseURL)
+	integer("media.object_storage.presign_ttl_seconds", &c.Media.ObjectStorage.PresignTTLSeconds)
+	integer("media.object_storage.retention_days", &c.Media.ObjectStorage.RetentionDays)
+	integer64("media.object_storage.max_download_bytes", &c.Media.ObjectStorage.MaxDownloadBytes)
+	if v, ok := configs["media.object_storage.allowed_download_hosts"]; ok && v != "" {
+		var hosts []string
+		if err := json.Unmarshal([]byte(v), &hosts); err == nil {
+			c.Media.ObjectStorage.AllowedDownloadHosts = hosts
+		}
+	}
 
 	// Cron
 	integer("cron.max_retries", &c.Cron.MaxRetries)

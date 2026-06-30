@@ -87,6 +87,78 @@ func TestLoad_ValidJSON5(t *testing.T) {
 	}
 }
 
+func TestLoad_MediaObjectStorageConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.json5")
+	content := `{
+		media: {
+			object_storage: {
+				enabled: true,
+				provider: "tos",
+				bucket: "goclaw-media",
+				endpoint: "https://tos-s3-cn-beijing.volces.com",
+				region: "cn-beijing",
+				prefix: "goclaw-media/",
+				access_key_id: "ak",
+				secret_access_key: "sk",
+				url_mode: "public",
+				public_base_url: "https://cdn.example.com/media",
+				presign_ttl_seconds: 604800,
+				retention_days: 7,
+				max_download_bytes: 1048576,
+				allowed_download_hosts: ["storage.googleapis.com"],
+			},
+		},
+	}`
+	if err := os.WriteFile(cfgPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(cfgPath)
+	if err != nil {
+		t.Fatalf("load error: %v", err)
+	}
+	got := cfg.Media.ObjectStorage
+	if !got.Enabled || got.Provider != "tos" || got.Bucket != "goclaw-media" {
+		t.Fatalf("media object storage not loaded: %+v", got)
+	}
+	if got.Endpoint != "https://tos-s3-cn-beijing.volces.com" || got.Region != "cn-beijing" {
+		t.Fatalf("endpoint/region not loaded: %+v", got)
+	}
+	if got.URLMode != "public" || got.PublicBaseURL != "https://cdn.example.com/media" {
+		t.Fatalf("URL fields not loaded: %+v", got)
+	}
+	if got.PresignTTLSeconds != 604800 || got.RetentionDays != 7 || got.MaxDownloadBytes != 1048576 {
+		t.Fatalf("numeric fields not loaded: %+v", got)
+	}
+	if len(got.AllowedDownloadHosts) != 1 || got.AllowedDownloadHosts[0] != "storage.googleapis.com" {
+		t.Fatalf("allowed hosts not loaded: %+v", got.AllowedDownloadHosts)
+	}
+}
+
+func TestDefault_MediaObjectStorageDefaults(t *testing.T) {
+	cfg := Default()
+	got := cfg.Media.ObjectStorage
+	if got.Enabled {
+		t.Fatal("media object storage should default disabled")
+	}
+	if got.Provider != "tos" {
+		t.Fatalf("provider = %q, want tos", got.Provider)
+	}
+	if got.Prefix != "goclaw-media/" {
+		t.Fatalf("prefix = %q, want goclaw-media/", got.Prefix)
+	}
+	if got.URLMode != "presigned" {
+		t.Fatalf("url mode = %q, want presigned", got.URLMode)
+	}
+	if got.PresignTTLSeconds != 86400 {
+		t.Fatalf("presign ttl = %d, want 86400", got.PresignTTLSeconds)
+	}
+	if got.MaxDownloadBytes != 52428800 {
+		t.Fatalf("max download bytes = %d, want 52428800", got.MaxDownloadBytes)
+	}
+}
+
 // --- Load with invalid JSON5 → error ---
 
 func TestLoad_InvalidJSON5(t *testing.T) {

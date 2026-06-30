@@ -238,6 +238,20 @@ func syncBridgeToState(bridgeRS *runState, state *pipeline.RunState, action tool
 			})
 		}
 	}
+	if len(bridgeRS.remoteMediaResults) > 0 {
+		state.Tool.RemoteMediaResults = state.Tool.RemoteMediaResults[:0]
+		for _, ref := range bridgeRS.remoteMediaResults {
+			state.Tool.RemoteMediaResults = append(state.Tool.RemoteMediaResults, pipeline.RemoteMediaResult{
+				URL:       ref.URL,
+				Key:       ref.Key,
+				MimeType:  ref.MimeType,
+				Kind:      ref.Kind,
+				Size:      ref.Size,
+				ExpiresAt: ref.ExpiresAt,
+				Prompt:    ref.Prompt,
+			})
+		}
+	}
 	if state.Tool.LoopKilled && action == toolResultBreak {
 		state.Observe.FinalContent = bridgeRS.finalContent
 	}

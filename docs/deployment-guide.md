@@ -54,6 +54,10 @@ export GOCLAW_DOMAIN=<public-domain>
 
 Secrets are stored only in server env files. Do not copy tokens or database passwords into repo docs.
 
+For ComfyUI MCP generated images delivered through TOS object storage, see
+[`remote-media-bridge-tos.md`](./remote-media-bridge-tos.md). Keep media object-storage
+credentials separate from backup S3/R2 credentials.
+
 ## Runtime Services
 
 Check status:

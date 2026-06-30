@@ -13,6 +13,13 @@ COMPOSE_FILES=(
   -f docker-compose.sandbox-ceo.yml
 )
 
+SUPPORT_SERVICES=(
+  postgres
+  chrome
+  jaeger
+  redis
+)
+
 UPGRADE_FILES=(
   -f docker-compose.yml
   -f docker-compose.postgres.yml
@@ -37,6 +44,10 @@ set_version_file() {
 health_check() {
   curl -fsS http://localhost:18790/health >/dev/null
   echo "Health check OK: http://localhost:18790/health"
+}
+
+ensure_support_services() {
+  GOCLAW_VERSION="$(cat VERSION)" compose up -d "${SUPPORT_SERVICES[@]}"
 }
 
 prepare_env() {
@@ -68,11 +79,55 @@ start() {
 }
 
 deploy() {
+  local mode="${1:-}"
+  if [ -z "$mode" ]; then
+    if [ -t 0 ]; then
+      cat <<'EOM'
+请选择部署模式:
+  1) backend  只重建后端镜像，跳过 embedded UI（更快）
+  2) frontend 重建完整镜像，包含 embedded UI（推荐）
+  3) all      构建所有服务镜像并重新拉起完整部署
+EOM
+      read -r -p "请输入 [2]: " mode
+      case "${mode:-2}" in
+        1|backend|--backend|后端) mode="backend" ;;
+        2|frontend|--frontend|前端|"") mode="frontend" ;;
+        3|all|--all|全部) mode="all" ;;
+        *) echo "无效选择: $mode"; return 1 ;;
+      esac
+    else
+      mode="frontend"
+    fi
+  fi
+
   set_version_file
-  GOCLAW_VERSION="$(cat VERSION)" compose build goclaw
-  GOCLAW_VERSION="$(cat VERSION)" compose up -d --no-deps goclaw
-  # Ensure ComfyUI is running for embedded media studio page.
-  GOCLAW_VERSION="$(cat VERSION)" compose up -d comfyui
+  ensure_support_services
+
+  case "$mode" in
+    backend)
+      echo "Deploy mode: backend (embedded UI disabled)"
+      GOCLAW_VERSION="$(cat VERSION)" compose build --build-arg ENABLE_EMBEDUI=false goclaw
+      ;;
+    frontend)
+      echo "Deploy mode: frontend (embedded UI enabled)"
+      GOCLAW_VERSION="$(cat VERSION)" compose build goclaw
+      ;;
+    all)
+      echo "Deploy mode: all (full compose build + up)"
+      GOCLAW_VERSION="$(cat VERSION)" compose build
+      GOCLAW_VERSION="$(cat VERSION)" compose up -d
+      migrate
+      health_check
+      status
+      return
+      ;;
+    *)
+      echo "用法: ./scripts/dev-docker-local.sh deploy [backend|frontend|all]"
+      return 1
+      ;;
+  esac
+
+  GOCLAW_VERSION="$(cat VERSION)" compose up -d --force-recreate --no-deps goclaw
   migrate
   health_check
   status
@@ -135,6 +190,7 @@ usage() {
   cat <<'EOM'
 Usage:
   ./scripts/dev-docker-local.sh <command>
+  ./scripts/dev-docker-local.sh deploy [backend|frontend|all]
 
 
 EOM
@@ -158,7 +214,7 @@ case "$cmd" in
     start
     ;;
   deploy)
-    deploy
+    deploy "${2:-}"
     ;;
   quick)
     quick "${2:-}"

@@ -120,6 +120,15 @@ func Default() *Config {
 			MaxUploadSizeMB: DefaultSkillMaxUploadSizeMB,
 		},
 		Sessions: SessionsConfig{},
+		Media: MediaConfig{
+			ObjectStorage: MediaObjectStorageConfig{
+				Provider:          "tos",
+				Prefix:            "goclaw-media/",
+				URLMode:           "presigned",
+				PresignTTLSeconds: 86400,
+				MaxDownloadBytes:  52428800,
+			},
+		},
 	}
 }
 

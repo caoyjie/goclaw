@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/nextlevelbuilder/goclaw/internal/hooks"
@@ -60,6 +61,7 @@ func (s *FinalizeStage) Execute(ctx context.Context, state *RunState) error {
 
 	// 3. Deduplicate + populate media sizes
 	s.processMedia(state)
+	s.appendRemoteMediaLinks(state)
 
 	// 3b. Persist assistant-generated images (Codex image_generation_call) to disk
 	// BEFORE building the assistant message so MediaRefs are included in the session store.
@@ -107,6 +109,19 @@ func (s *FinalizeStage) Execute(ctx context.Context, state *RunState) error {
 	}
 	// Append persisted assistant image refs (Codex image_generation_call output).
 	assistantMsg.MediaRefs = append(assistantMsg.MediaRefs, assistantImageRefs...)
+	for _, remote := range state.Tool.RemoteMediaResults {
+		assistantMsg.MediaRefs = append(assistantMsg.MediaRefs, providers.MediaRef{
+			ID:        filepath.Base(remote.Key),
+			MimeType:  remote.MimeType,
+			Kind:      remote.Kind,
+			Prompt:    remote.Prompt,
+			URL:       remote.URL,
+			Key:       remote.Key,
+			Size:      remote.Size,
+			ExpiresAt: remote.ExpiresAt,
+			Remote:    true,
+		})
+	}
 	state.Messages.AppendPending(assistantMsg)
 
 	// 4. Flush remaining pending messages to session store
@@ -170,6 +185,27 @@ func (s *FinalizeStage) Execute(ctx context.Context, state *RunState) error {
 	}
 
 	return nil
+}
+
+func (s *FinalizeStage) appendRemoteMediaLinks(state *RunState) {
+	if len(state.Tool.RemoteMediaResults) == 0 {
+		return
+	}
+	var urls []string
+	for _, ref := range state.Tool.RemoteMediaResults {
+		if ref.URL != "" && !strings.Contains(state.Observe.FinalContent, ref.URL) {
+			urls = append(urls, ref.URL)
+		}
+	}
+	if len(urls) == 0 {
+		return
+	}
+	block := "图片已生成：\n" + strings.Join(urls, "\n")
+	if strings.TrimSpace(state.Observe.FinalContent) == "" || state.Observe.FinalContent == "..." {
+		state.Observe.FinalContent = block
+		return
+	}
+	state.Observe.FinalContent = strings.TrimRight(state.Observe.FinalContent, "\n") + "\n\n" + block
 }
 
 // processMedia populates file sizes and deduplicates media results.

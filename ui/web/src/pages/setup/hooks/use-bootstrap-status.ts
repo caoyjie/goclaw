@@ -9,6 +9,7 @@ export type SetupStep = 1 | 2 | 3 | 4 | "complete";
 
 export function useBootstrapStatus() {
   const connected = useAuthStore((s) => s.connected);
+  const role = useAuthStore((s) => s.role);
   const userId = useAuthStore((s) => s.userId);
   const tenantId = useAuthStore((s) => s.tenantId);
   const tenantSlug = useAuthStore((s) => s.tenantSlug);
@@ -21,6 +22,13 @@ export function useBootstrapStatus() {
 
   const { needsSetup, currentStep } = useMemo(() => {
     if (loading) return { needsSetup: false, currentStep: "complete" as SetupStep };
+
+    // Setup creates providers and agents, which are admin-only operations.
+    // Non-admin users should enter the app with whatever agents are shared to them
+    // instead of being trapped in the bootstrap wizard by provider read restrictions.
+    if (role !== "admin" && role !== "owner") {
+      return { needsSetup: false, currentStep: "complete" as SetupStep };
+    }
 
     const readyOAuthProviders = new Set(
       oauthStatuses
@@ -42,7 +50,7 @@ export function useBootstrapStatus() {
     if (!hasProvider) return { needsSetup: true, currentStep: 1 as SetupStep };
     if (!hasAgent) return { needsSetup: true, currentStep: 2 as SetupStep };
     return { needsSetup: false, currentStep: "complete" as SetupStep };
-  }, [agents, loading, oauthStatuses, providers, tenantId, tenantSlug, userId]);
+  }, [agents, loading, oauthStatuses, providers, role, tenantId, tenantSlug, userId]);
 
   return { needsSetup, currentStep, loading, providers, agents };
 }

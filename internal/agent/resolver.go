@@ -87,6 +87,9 @@ type ResolverDeps struct {
 	// MCP OAuth token provider — injects Bearer tokens for OAuth-enabled MCP servers
 	MCPOAuthTokenProvider mcpbridge.OAuthTokenProvider
 
+	// Remote media bridge for MCP outputs
+	RemoteMedia RemoteMediaProcessor
+
 	// Skill access store — for per-agent skill visibility filtering
 	SkillAccessStore    store.SkillAccessStore
 	SkillStore          store.SkillStore
@@ -550,6 +553,7 @@ func NewManagedResolver(deps ResolverDeps) ResolverFunc {
 			MCPUserCredSrvs:        mcpUserCredSrvs,
 			MCPGrantChecker:        deps.MCPGrantChecker,
 			MCPOAuthTokenProvider:  deps.MCPOAuthTokenProvider,
+			RemoteMedia:            deps.RemoteMedia,
 			OrchMode:               orchMode,
 			DelegateTargets:        delegateTargets,
 			EvolutionMetricsStore:  evoMetricsStore,

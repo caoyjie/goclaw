@@ -2507,6 +2507,50 @@ func TestFinalizeStage_PersistsFromObserveAccumulator(t *testing.T) {
 	}
 }
 
+func TestFinalizeStage_AppendsRemoteMediaLinks(t *testing.T) {
+	t.Parallel()
+	var flushed []providers.Message
+	deps := &PipelineDeps{
+		FlushMessages: func(_ context.Context, _ string, messages []providers.Message) error {
+			flushed = append([]providers.Message(nil), messages...)
+			return nil
+		},
+	}
+	stage := NewFinalizeStage(deps)
+	state := defaultState()
+	state.Observe.FinalContent = "Done."
+	state.Tool.RemoteMediaResults = []RemoteMediaResult{
+		{
+			URL:      "https://media.example.com/goclaw-media/a.png",
+			Key:      "goclaw-media/a.png",
+			MimeType: "image/png",
+			Kind:     "image",
+			Size:     123,
+		},
+	}
+
+	if err := stage.Execute(context.Background(), state); err != nil {
+		t.Fatalf("Execute() error: %v", err)
+	}
+	if !strings.Contains(state.Observe.FinalContent, "图片已生成：\nhttps://media.example.com/goclaw-media/a.png") {
+		t.Fatalf("FinalContent = %q, want remote media link block", state.Observe.FinalContent)
+	}
+	if len(flushed) == 0 {
+		t.Fatal("no flushed messages")
+	}
+	refs := flushed[len(flushed)-1].MediaRefs
+	if len(refs) != 1 {
+		t.Fatalf("MediaRefs len = %d, want 1", len(refs))
+	}
+	ref := refs[0]
+	if !ref.Remote || ref.URL == "" || ref.Key != "goclaw-media/a.png" || ref.Path != "" {
+		t.Fatalf("remote MediaRef not persisted correctly: %+v", ref)
+	}
+	if ref.MimeType != "image/png" || ref.Kind != "image" || ref.Size != 123 {
+		t.Fatalf("remote MediaRef metadata mismatch: %+v", ref)
+	}
+}
+
 // TestFinalizeStage_NoPersistWhenAccumulatorEmpty verifies no-op when no images
 // were emitted across any iteration. Prevents regression where a non-nil
 // LastResponse with empty Images would still call PersistAssistantImages.
@@ -3332,4 +3376,3 @@ func TestToolStage_Parallel_DefersNonToolMessages(t *testing.T) {
 		t.Errorf("pending[3].Content = %q, want nudge", pending[3].Content)
 	}
 }
-

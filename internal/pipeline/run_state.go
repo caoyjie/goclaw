@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"time"
 
 	"github.com/nextlevelbuilder/goclaw/internal/bus"
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
@@ -116,4 +117,14 @@ type MediaResult struct {
 	// Prompt is the generation prompt for AI-generated media (e.g. create_image).
 	// Empty for user-uploaded or non-generated files.
 	Prompt string
+}
+
+type RemoteMediaResult struct {
+	URL       string
+	Key       string
+	MimeType  string
+	Kind      string
+	Size      int64
+	ExpiresAt *time.Time
+	Prompt    string
 }

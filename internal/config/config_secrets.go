@@ -59,6 +59,10 @@ func (c *Config) MaskedCopy() *Config {
 	maskNonEmpty(&cp.Tts.ElevenLabs.APIKey)
 	maskNonEmpty(&cp.Tts.MiniMax.APIKey)
 
+	// Mask media object storage credentials
+	maskNonEmpty(&cp.Media.ObjectStorage.AccessKeyID)
+	maskNonEmpty(&cp.Media.ObjectStorage.SecretAccessKey)
+
 	// Mask Tailscale auth key
 	maskNonEmpty(&cp.Tailscale.AuthKey)
 
@@ -106,6 +110,10 @@ func (c *Config) StripSecrets() {
 	c.Tts.OpenAI.APIKey = ""
 	c.Tts.ElevenLabs.APIKey = ""
 	c.Tts.MiniMax.APIKey = ""
+
+	// Media object storage credentials
+	c.Media.ObjectStorage.AccessKeyID = ""
+	c.Media.ObjectStorage.SecretAccessKey = ""
 
 	// Tailscale auth key
 	c.Tailscale.AuthKey = ""
@@ -160,6 +168,10 @@ func (c *Config) StripMaskedSecrets() {
 	stripIfMasked(&c.Tts.ElevenLabs.APIKey)
 	stripIfMasked(&c.Tts.MiniMax.APIKey)
 
+	// Media object storage credentials
+	stripIfMasked(&c.Media.ObjectStorage.AccessKeyID)
+	stripIfMasked(&c.Media.ObjectStorage.SecretAccessKey)
+
 	// Tailscale auth key
 	stripIfMasked(&c.Tailscale.AuthKey)
 }
@@ -179,6 +191,8 @@ func (c *Config) ApplyDBSecrets(secrets map[string]string) {
 	apply("tts.elevenlabs.api_key", &c.Tts.ElevenLabs.APIKey)
 	apply("tts.minimax.api_key", &c.Tts.MiniMax.APIKey)
 	apply("tts.minimax.group_id", &c.Tts.MiniMax.GroupID)
+	apply("media.object_storage.access_key_id", &c.Media.ObjectStorage.AccessKeyID)
+	apply("media.object_storage.secret_access_key", &c.Media.ObjectStorage.SecretAccessKey)
 	apply("tailscale.auth_key", &c.Tailscale.AuthKey)
 }
 
@@ -198,6 +212,8 @@ func (c *Config) ExtractDBSecrets() map[string]string {
 	collect("tts.elevenlabs.api_key", c.Tts.ElevenLabs.APIKey)
 	collect("tts.minimax.api_key", c.Tts.MiniMax.APIKey)
 	collect("tts.minimax.group_id", c.Tts.MiniMax.GroupID)
+	collect("media.object_storage.access_key_id", c.Media.ObjectStorage.AccessKeyID)
+	collect("media.object_storage.secret_access_key", c.Media.ObjectStorage.SecretAccessKey)
 	collect("tailscale.auth_key", c.Tailscale.AuthKey)
 
 	return secrets

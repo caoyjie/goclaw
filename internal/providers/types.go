@@ -133,11 +133,16 @@ type VideoContent struct {
 // Stored in session JSONB (~60 bytes each) instead of megabytes for base64.
 // On reload, MediaRefs are resolved to file paths and loaded into Images (for images).
 type MediaRef struct {
-	ID       string `json:"id"`               // unique media ID (uuid)
-	MimeType string `json:"mime_type"`        // e.g. "image/jpeg", "application/pdf"
-	Kind     string `json:"kind"`             // "image", "video", "audio", "document"
-	Path     string `json:"path,omitempty"`   // absolute workspace path (persisted for /v1/files/ serving)
-	Prompt   string `json:"prompt,omitempty"` // prompt that generated this asset, if known
+	ID        string     `json:"id"`                   // unique media ID (uuid)
+	MimeType  string     `json:"mime_type"`            // e.g. "image/jpeg", "application/pdf"
+	Kind      string     `json:"kind"`                 // "image", "video", "audio", "document"
+	Path      string     `json:"path,omitempty"`       // absolute workspace path (persisted for /v1/files/ serving)
+	Prompt    string     `json:"prompt,omitempty"`     // prompt that generated this asset, if known
+	URL       string     `json:"url,omitempty"`        // remote media URL
+	Key       string     `json:"key,omitempty"`        // remote object storage key
+	Size      int64      `json:"size,omitempty"`       // media size in bytes
+	ExpiresAt *time.Time `json:"expires_at,omitempty"` // remote URL expiry when presigned
+	Remote    bool       `json:"remote,omitempty"`     // true when URL/Key points at object storage
 }
 
 // Message represents a conversation message.

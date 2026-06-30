@@ -52,6 +52,7 @@ type Config struct {
 	Skills    SkillsConfig    `json:"skills"`
 	Sessions  SessionsConfig  `json:"sessions"`
 	Database  DatabaseConfig  `json:"database"`
+	Media     MediaConfig     `json:"media,omitempty"`
 	Tts       TtsConfig       `json:"tts"`
 	Audio     *AudioConfig    `json:"audio,omitempty"` // optional STT/Music defaults (Phase 3/4)
 	Cron      CronConfig      `json:"cron"`
@@ -79,6 +80,27 @@ type PackagesConfig struct {
 	GitHubToken     string `json:"github_token,omitempty"`      // Phase 2 stub
 	UpdatesCheckTTL string `json:"updates_check_ttl,omitempty"` // e.g. "1h"
 	ScratchDir      string `json:"scratch_dir,omitempty"`       // abs path
+}
+
+type MediaConfig struct {
+	ObjectStorage MediaObjectStorageConfig `json:"object_storage,omitempty"`
+}
+
+type MediaObjectStorageConfig struct {
+	Enabled              bool     `json:"enabled,omitempty"`
+	Provider             string   `json:"provider,omitempty"`
+	Bucket               string   `json:"bucket,omitempty"`
+	Endpoint             string   `json:"endpoint,omitempty"`
+	Region               string   `json:"region,omitempty"`
+	Prefix               string   `json:"prefix,omitempty"`
+	AccessKeyID          string   `json:"access_key_id,omitempty"`
+	SecretAccessKey      string   `json:"secret_access_key,omitempty"`
+	URLMode              string   `json:"url_mode,omitempty"`
+	PublicBaseURL        string   `json:"public_base_url,omitempty"`
+	PresignTTLSeconds    int      `json:"presign_ttl_seconds,omitempty"`
+	RetentionDays        int      `json:"retention_days,omitempty"`
+	MaxDownloadBytes     int64    `json:"max_download_bytes,omitempty"`
+	AllowedDownloadHosts []string `json:"allowed_download_hosts,omitempty"`
 }
 
 // UpdatesCheckTTLDuration parses UpdatesCheckTTL returning 1h on empty/invalid.
@@ -578,6 +600,7 @@ func (c *Config) ReplaceFrom(src *Config) {
 	c.Skills = src.Skills
 	c.Sessions = src.Sessions
 	c.Database = src.Database
+	c.Media = src.Media
 	c.Tts = src.Tts
 	c.Cron = src.Cron
 	c.Telemetry = src.Telemetry

@@ -15,6 +15,7 @@ import (
 	"github.com/nextlevelbuilder/goclaw/internal/hooks"
 	mcpbridge "github.com/nextlevelbuilder/goclaw/internal/mcp"
 	"github.com/nextlevelbuilder/goclaw/internal/media"
+	"github.com/nextlevelbuilder/goclaw/internal/mediaremote"
 	"github.com/nextlevelbuilder/goclaw/internal/memory"
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
 	"github.com/nextlevelbuilder/goclaw/internal/sandbox"
@@ -68,6 +69,10 @@ type BootstrapCleanupFunc func(ctx context.Context, agentID uuid.UUID, userID st
 // SeedUserFiles writes via raw agentStore (bypassing ContextFileInterceptor cache),
 // so this callback ensures LoadContextFiles sees the newly seeded files.
 type CacheInvalidateFunc func(agentID uuid.UUID, userID string)
+
+type RemoteMediaProcessor interface {
+	ProcessToolResult(ctx context.Context, input mediaremote.ToolResultInput) ([]mediaremote.RemoteMediaRef, error)
+}
 
 // Loop is the agent execution loop for one agent instance.
 // Think → Act → Observe cycle with tool execution.
@@ -145,6 +150,7 @@ type Loop struct {
 	mcpUserTools          sync.Map                     // userID → []tools.Tool (cached per-user tools)
 	mcpGrantChecker       mcpbridge.GrantChecker       // runtime grant verification (nil = skip)
 	mcpOAuthTokenProvider mcpbridge.OAuthTokenProvider // OAuth Bearer token injection (nil = disabled)
+	remoteMedia           RemoteMediaProcessor         // optional remote media bridge for MCP outputs
 
 	// Compaction config (memory flush settings)
 	compactionCfg *config.CompactionConfig
@@ -449,11 +455,12 @@ type LoopConfig struct {
 	MemoryStore store.MemoryStore
 
 	// Per-user MCP tools (servers requiring per-user credentials)
-	MCPStore              store.MCPServerStore      // for credential lookup
-	MCPPool               *mcpbridge.Pool           // user-keyed connection pool
-	MCPUserCredSrvs       []store.MCPAccessInfo     // servers needing per-user creds
-	MCPGrantChecker       mcpbridge.GrantChecker    // runtime grant verification (nil = skip)
+	MCPStore              store.MCPServerStore         // for credential lookup
+	MCPPool               *mcpbridge.Pool              // user-keyed connection pool
+	MCPUserCredSrvs       []store.MCPAccessInfo        // servers needing per-user creds
+	MCPGrantChecker       mcpbridge.GrantChecker       // runtime grant verification (nil = skip)
 	MCPOAuthTokenProvider mcpbridge.OAuthTokenProvider // OAuth Bearer token injection (nil = disabled)
+	RemoteMedia           RemoteMediaProcessor         // optional remote media bridge for MCP outputs
 
 	// V3 orchestration mode (resolved by resolver, controls tool visibility)
 	OrchMode        OrchestrationMode
@@ -597,6 +604,7 @@ func NewLoop(cfg LoopConfig) *Loop {
 		mcpUserCredSrvs:        cfg.MCPUserCredSrvs,
 		mcpGrantChecker:        cfg.MCPGrantChecker,
 		mcpOAuthTokenProvider:  cfg.MCPOAuthTokenProvider,
+		remoteMedia:            cfg.RemoteMedia,
 		orchMode:               cfg.OrchMode,
 		delegateTargets:        cfg.DelegateTargets,
 		evolutionMetricsStore:  cfg.EvolutionMetricsStore,
@@ -706,12 +714,13 @@ type runState struct {
 	totalToolCalls int
 
 	// Output accumulators
-	finalContent   string
-	finalThinking  string
-	asyncToolCalls []string // async spawn tool names for fallback
-	mediaResults   []MediaResult
-	deliverables   []string // tool output content for team task results
-	pendingMsgs    []providers.Message
+	finalContent       string
+	finalThinking      string
+	asyncToolCalls     []string // async spawn tool names for fallback
+	mediaResults       []MediaResult
+	remoteMediaResults []mediaremote.RemoteMediaRef
+	deliverables       []string // tool output content for team task results
+	pendingMsgs        []providers.Message
 
 	// Event state
 	blockReplies   int

@@ -2,10 +2,16 @@ package agent
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"log/slog"
 	"path/filepath"
+	"time"
 
+	"github.com/google/uuid"
+	"github.com/nextlevelbuilder/goclaw/internal/mediaremote"
 	"github.com/nextlevelbuilder/goclaw/internal/providers"
+	"github.com/nextlevelbuilder/goclaw/internal/store"
 	"github.com/nextlevelbuilder/goclaw/internal/tools"
 	"github.com/nextlevelbuilder/goclaw/pkg/protocol"
 )
@@ -82,6 +88,7 @@ func (l *Loop) processToolResult(
 	})
 
 	l.scanWebToolResult(tc.Name, result)
+	l.processRemoteMediaResult(ctx, rs, req, tc, registryName, result)
 
 	// Collect MEDIA: paths from tool results.
 	// Prefer result.Media (explicit) over ForLLM MEDIA: prefix (legacy) to avoid duplicates.
@@ -180,6 +187,36 @@ func (l *Loop) processToolResult(
 	}
 
 	return toolMsg, warningMsgs, action
+}
+
+func (l *Loop) processRemoteMediaResult(ctx context.Context, rs *runState, req *RunRequest, tc providers.ToolCall, registryName string, result *tools.Result) {
+	if l.remoteMedia == nil || result == nil || result.IsError {
+		return
+	}
+	tenantID := store.TenantIDFromContext(ctx)
+	if tenantID == uuid.Nil {
+		tenantID = l.tenantID
+	}
+	refs, err := l.remoteMedia.ProcessToolResult(ctx, mediaremote.ToolResultInput{
+		ToolName:       registryName,
+		Args:           tc.Arguments,
+		Raw:            result.ForLLM,
+		TenantID:       tenantID.String(),
+		AgentID:        l.id,
+		SessionKeyHash: hashSessionKey(req.SessionKey),
+		Now:            time.Now().UTC(),
+	})
+	if err != nil {
+		slog.Warn("mediaremote.process_failed", "agent", l.id, "tool", registryName, "error", err)
+	}
+	if len(refs) > 0 {
+		rs.remoteMediaResults = append(rs.remoteMediaResults, refs...)
+	}
+}
+
+func hashSessionKey(sessionKey string) string {
+	sum := sha256.Sum256([]byte(sessionKey))
+	return hex.EncodeToString(sum[:])[:16]
 }
 
 // checkReadOnlyStreak detects when the agent is stuck in a read-only loop.
